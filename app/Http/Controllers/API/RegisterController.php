@@ -11,7 +11,7 @@ use App\Http\Controllers\API\BaseController as BaseController;
 use Illuminate\Support\Facades\Auth;
 
 use Validator;
-
+use Illuminate\Support\Facades\Hash;
 
 class RegisterController extends BaseController
 {
@@ -46,14 +46,21 @@ class RegisterController extends BaseController
         if($validator->fails()){
             return $this->sendError('Validation Error.', $validator->errors());       
         }
-   
+        
         $input = $request->all();
-        $input['password'] = bcrypt($input['password']);
-        $user = User::create($input);
-        $success['token'] =  $user->createToken('repeps-Auth')->accessToken;
-        $success['name'] =  $user->name;
-   
-        return $this->sendResponse($success, 'User register successfully.');
+        $user = User::where('email', '=', $input['email'])->first();
+        if (!$user) {                
+                $input['password'] = bcrypt($input['password']);
+                $user = User::create($input);
+                $success['token'] =  $user->createToken('repeps-Auth')->accessToken;
+                $success['name'] =  $user->name;
+           
+                return $this->sendResponse($success, 'User register successfully.');
+        }else{
+            return $this->sendError('Unauthorised.', ['error'=>'User Already Exists login with different email!']);
+        }
+
+        
     }
   
     /**
@@ -72,17 +79,28 @@ class RegisterController extends BaseController
         // } else {
         //     return response()->json(['error' => 'Unauthorised'], 401);
         // }
+        $user = User::where('email', $request->email)->first();
 
-        if(Auth::attempt(['email' => $request->email, 'password' => $request->password])){ 
-            $user = Auth::user(); 
-            $success['token'] =  $user->createToken('repeps-Auth')-> accessToken; 
-            $success['name'] =  $user->name;
-   
-            return $this->sendResponse($success, 'User login successfully.');
-        } 
-        else{ 
-            return $this->sendError('Unauthorised.', ['error'=>'Unauthorised']);
+        if ($user) {
+            if (Hash::check($request->password, $user->password)) {
+                if (Auth::attempt(['email' => $request->email, 'password' => $request->password])) {
+                    $user = Auth::user(); 
+                    $success['token'] =  $user->createToken('repeps-Auth')->accessToken; 
+                    $success['name'] =  $user->name;
+           
+                    return $this->sendResponse($success, 'User login successfully.');
+
+                }else{
+                    return $this->sendError('Unauthorised.', ['error'=>'Unauthorised']);
+                }
+            
+            } else {
+                return $this->sendError('Unauthorised.', ['error'=>'Password mismatch']);
+            }
+        }else{
+                return $this->sendError('Unauthorised.', ['error'=>'User does not exist']);
         }
+        
     }
  	
  	/**
